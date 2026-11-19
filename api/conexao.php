@@ -21,17 +21,17 @@ $pass   = '0UvCcg70xMv0ypSk'; // <-- Clique em "Reset Password" no TiDB e cole a
 $dbname = 'db_sustentabilidade';
 
 try {
-    // 1. Conexão inicial ao servidor TiDB Cloud (com SSL obrigatório para conexão pública)
+      // 1. Conexão inicial ao servidor TiDB Cloud (forçando SSL/TLS obrigatório)
     $options = [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
+        PDO::ATTR_ERRMODE                  => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE       => PDO::FETCH_ASSOC,
+        PDO::MYSQL_ATTR_INIT_COMMAND       => "SET NAMES utf8mb4",
+        PDO::MYSQL_ATTR_SSL_CA             => true,
+        PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false
     ];
 
-    // Ativa o certificado SSL padrão do ambiente Linux/Vercel exigido pelo TiDB Cloud
-    if (file_exists('/etc/ssl/certs/ca-certificates.crt')) {
-        $options[PDO::MYSQL_ATTR_SSL_CA] = '/etc/ssl/certs/ca-certificates.crt';
-    }
+    $pdo = new PDO("mysql:host=$host;port=$port;charset=utf8mb4", $user, $pass, $options);
+
 
     $pdo = new PDO("mysql:host=$host;port=$port;charset=utf8mb4", $user, $pass, $options);
 
