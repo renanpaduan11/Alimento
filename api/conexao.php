@@ -83,17 +83,17 @@ try {
 
     // 7. Tabela 5: guia_plantio
     $pdo->exec("CREATE TABLE IF NOT EXISTS `guia_plantio` (
-    
         `id` INT AUTO_INCREMENT PRIMARY KEY,
         `cultura` VARCHAR(120) NOT NULL,
-        `estacao` VARCHAR(120) NOT NULL,
-        `espaco` VARCHAR(120) NOT NULL,
+        `estacao` VARCHAR(150) NOT NULL,
+        `espaco` VARCHAR(150) NOT NULL,
         `tempo_colheita` VARCHAR(80) NOT NULL,
         `necessidade_sol` VARCHAR(100) NOT NULL,
         `frequencia_rega` VARCHAR(120) NOT NULL,
         `dica_regional` TEXT NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    // Garante que colunas antigas no TiDB Cloud tenham tamanho suficiente
     $pdo->exec("ALTER TABLE `guia_plantio` MODIFY `estacao` VARCHAR(150) NOT NULL, MODIFY `espaco` VARCHAR(150) NOT NULL");
 
     // 8. Tabela 6: mitos_verdades (30 Questões Cientificamente Verificadas no Banco de Dados)
@@ -196,14 +196,15 @@ try {
     }
 
     // Seed 4: Comentários Iniciais
-    if (!empty($DADOS_COMENTARIOS_INICIAIS)) {
+    $comentariosSeed = $DADOS_COMENTARIOS_INICIAIS ?? $DADOS_COMENTARIOS ?? [];
+    if (!empty($comentariosSeed)) {
         $stmtCheckCom = $pdo->query("SELECT COUNT(*) FROM `comentarios`");
         if ((int)$stmtCheckCom->fetchColumn() === 0) {
             $stmtInsCom = $pdo->prepare("INSERT INTO `comentarios` 
                 (`tipo_origem`, `item_id`, `nome_usuario`, `nota`, `texto`, `status`) 
                 VALUES (:tipo_origem, :item_id, :nome_usuario, :nota, :texto, :status)");
 
-            foreach ($DADOS_COMENTARIOS as $c) {
+            foreach ($comentariosSeed as $c) {
                 $stmtInsCom->execute([
                     ':tipo_origem'  => $c['tipo_origem'],
                     ':item_id'      => $c['item_id'],
@@ -234,7 +235,6 @@ try {
             WHERE `cultura` = :cultura");
 
         foreach ($DADOS_PLANTIO as $p) {
-            // Aceita tanto 'cultura' quanto 'nome' (removendo numeração inicial "1. " se houver)
             $culturaNome = $p['cultura'] ?? $p['nome'] ?? '';
             $culturaNome = preg_replace('/^\d+\.\s*/', '', trim($culturaNome));
 
@@ -242,7 +242,6 @@ try {
                 continue;
             }
 
-            // Converte arrays 'estacoes' / 'espacos' em string caso venham nesse formato
             $estacaoStr = isset($p['estacao'])
                 ? (is_array($p['estacao']) ? implode(', ', $p['estacao']) : $p['estacao'])
                 : (isset($p['estacoes']) ? (is_array($p['estacoes']) ? implode(', ', $p['estacoes']) : $p['estacoes']) : 'Todas');
