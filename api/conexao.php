@@ -14,7 +14,7 @@ require_once __DIR__ . '/dados.php';
 // ===================================================================
 // CONFIGURAÇÕES DO TIDB CLOUD
 // ===================================================================
-$host   = 'a';
+$host   = 'gateway01.sa-east-1.prod.aws.tidbcloud.com';
 $port   = '4000';
 $user   = '3cbu4Yuw3KXeH6t.root';
 $pass   = '0UvCcg70xMv0ypSk';
