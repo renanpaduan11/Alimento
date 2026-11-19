@@ -12,26 +12,23 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/dados.php';
 
 // ===================================================================
-// CONFIGURAÇÕES DO TIDB CLOUD (PREENCHIDAS COM SEUS DADOS)
+// CONFIGURAÇÕES DO TIDB CLOUD
 // ===================================================================
 $host   = 'gateway01.sa-east-1.prod.aws.tidbcloud.com';
 $port   = '4000';
 $user   = '3cbu4Yuw3KXeH6t.root';
-$pass   = '0UvCcg70xMv0ypSk'; // <-- Clique em "Reset Password" no TiDB e cole a senha aqui
+$pass   = '0UvCcg70xMv0ypSk';
 $dbname = 'db_sustentabilidade';
 
 try {
-      // 1. Conexão inicial ao servidor TiDB Cloud (forçando SSL/TLS obrigatório)
+    // 1. Conexão inicial ao servidor TiDB Cloud (forçando SSL/TLS obrigatório)
     $options = [
-        PDO::ATTR_ERRMODE                  => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE       => PDO::FETCH_ASSOC,
-        PDO::MYSQL_ATTR_INIT_COMMAND       => "SET NAMES utf8mb4",
-        PDO::MYSQL_ATTR_SSL_CA             => true,
+        PDO::ATTR_ERRMODE                      => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE           => PDO::FETCH_ASSOC,
+        PDO::MYSQL_ATTR_INIT_COMMAND           => "SET NAMES utf8mb4",
+        PDO::MYSQL_ATTR_SSL_CA                 => true,
         PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false
     ];
-
-    $pdo = new PDO("mysql:host=$host;port=$port;charset=utf8mb4", $user, $pass, $options);
-
 
     $pdo = new PDO("mysql:host=$host;port=$port;charset=utf8mb4", $user, $pass, $options);
 
@@ -88,8 +85,8 @@ try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS `guia_plantio` (
         `id` INT AUTO_INCREMENT PRIMARY KEY,
         `cultura` VARCHAR(120) NOT NULL,
-        `estacao` VARCHAR(60) NOT NULL,
-        `espaco` VARCHAR(80) NOT NULL,
+        `estacao` VARCHAR(120) NOT NULL,
+        `espaco` VARCHAR(120) NOT NULL,
         `tempo_colheita` VARCHAR(80) NOT NULL,
         `necessidade_sol` VARCHAR(100) NOT NULL,
         `frequencia_rega` VARCHAR(120) NOT NULL,
@@ -117,7 +114,7 @@ try {
         $stmtInsAdmin->execute([':u' => 'admin', ':s' => $hash]);
     }
 
-    // Seed 2: Receitas (Insere novas e atualiza fotos/ingredientes das existentes sem apagar comentários)
+    // Seed 2: Receitas
     if (!empty($DADOS_RECEITAS)) {
         $titulosNoBanco = $pdo->query("SELECT `titulo` FROM `receitas`")->fetchAll(PDO::FETCH_COLUMN);
 
@@ -144,7 +141,7 @@ try {
                     ':dica_sustentavel' => $r['dica_sustentavel'],
                     ':autor'            => $r['autor'],
                     ':imagem_url'       => $r['imagem_url'],
-                    ':status'           => $r['status']
+                    ':status'           => $r['status'] ?? 'aprovado'
                 ]);
             } else {
                 $stmtUpdRec->execute([
@@ -160,7 +157,7 @@ try {
         }
     }
 
-    // Seed 3: Locais Sustentáveis (Insere novos e garante endereços/fotos atualizados)
+    // Seed 3: Locais Sustentáveis
     if (!empty($DADOS_LOCAIS)) {
         $locaisNoBanco = $pdo->query("SELECT `nome` FROM `locais_sustentaveis`")->fetchAll(PDO::FETCH_COLUMN);
 
@@ -195,7 +192,7 @@ try {
         }
     }
 
-    // Seed 4: Comentários Iniciais (Insere apenas se a tabela estiver vazia)
+    // Seed 4: Comentários Iniciais
     if (!empty($DADOS_COMENTARIOS)) {
         $stmtCheckCom = $pdo->query("SELECT COUNT(*) FROM `comentarios`");
         if ((int)$stmtCheckCom->fetchColumn() === 0) {
@@ -215,7 +212,8 @@ try {
             }
         }
     }
-    // Seed 5: Guia de Plantio (Insere novas culturas e atualiza dicas existentes)
+
+    // Seed 5: Guia de Plantio (Compatível com chaves curtas/arrays do dados.php e colunas do banco)
     if (!empty($DADOS_PLANTIO)) {
         $culturasNoBanco = $pdo->query("SELECT `cultura` FROM `guia_plantio`")->fetchAll(PDO::FETCH_COLUMN);
 
@@ -233,16 +231,34 @@ try {
             WHERE `cultura` = :cultura");
 
         foreach ($DADOS_PLANTIO as $p) {
+            // Aceita tanto 'cultura' quanto 'nome' (removendo numeração inicial "1. " se houver)
+            $culturaNome = $p['cultura'] ?? $p['nome'] ?? '';
+            $culturaNome = preg_replace('/^\d+\.\s*/', '', trim($culturaNome));
+
+            if ($culturaNome === '') {
+                continue;
+            }
+
+            // Converte arrays 'estacoes' / 'espacos' em string caso venham nesse formato
+            $estacaoStr = isset($p['estacao'])
+                ? (is_array($p['estacao']) ? implode(', ', $p['estacao']) : $p['estacao'])
+                : (isset($p['estacoes']) ? (is_array($p['estacoes']) ? implode(', ', $p['estacoes']) : $p['estacoes']) : 'Todas');
+
+            $espacoStr = isset($p['espaco'])
+                ? (is_array($p['espaco']) ? implode(', ', $p['espaco']) : $p['espaco'])
+                : (isset($p['espacos']) ? (is_array($p['espacos']) ? implode(', ', $p['espacos']) : $p['espacos']) : 'Vaso / Canteiro');
+
             $paramsPlantio = [
-                ':cultura'         => $p['cultura'],
-                ':estacao'         => $p['estacao'],
-                ':espaco'          => $p['espaco'],
-                ':tempo_colheita'  => $p['tempo_colheita'],
-                ':necessidade_sol' => $p['necessidade_sol'],
-                ':frequencia_rega' => $p['frequencia_rega'],
-                ':dica_regional'   => $p['dica_regional']
+                ':cultura'         => $culturaNome,
+                ':estacao'         => $estacaoStr,
+                ':espaco'          => $espacoStr,
+                ':tempo_colheita'  => $p['tempo_colheita']  ?? $p['colheita']     ?? 'Não informado',
+                ':necessidade_sol' => $p['necessidade_sol'] ?? $p['sol']          ?? 'Sol pleno / Meia-sombra',
+                ':frequencia_rega' => $p['frequencia_rega'] ?? $p['rega']         ?? 'Regular',
+                ':dica_regional'   => $p['dica_regional']   ?? $p['dicaRegional'] ?? ''
             ];
-            if (!in_array($p['cultura'], $culturasNoBanco, true)) {
+
+            if (!in_array($culturaNome, $culturasNoBanco, true)) {
                 $stmtInsPlantio->execute($paramsPlantio);
             } else {
                 $stmtUpdPlantio->execute($paramsPlantio);
@@ -250,7 +266,7 @@ try {
         }
     }
 
-    // Seed 6: Mitos e Verdades (Insere novas perguntas e atualiza explicações/imagens)
+    // Seed 6: Mitos e Verdades (Compatível com 'resposta_correta' e 'respostaCorreta')
     if (!empty($DADOS_MITOS)) {
         $perguntasNoBanco = $pdo->query("SELECT `pergunta` FROM `mitos_verdades`")->fetchAll(PDO::FETCH_COLUMN);
 
@@ -265,12 +281,17 @@ try {
             WHERE `pergunta` = :pergunta");
 
         foreach ($DADOS_MITOS as $m) {
+            if (empty($m['pergunta'])) {
+                continue;
+            }
+
             $paramsMito = [
                 ':pergunta'         => $m['pergunta'],
-                ':resposta_correta' => $m['resposta_correta'],
-                ':imagem'           => $m['imagem'],
-                ':explicacao'       => $m['explicacao']
+                ':resposta_correta' => $m['resposta_correta'] ?? $m['respostaCorreta'] ?? 'Mito',
+                ':imagem'           => $m['imagem'] ?? '',
+                ':explicacao'       => $m['explicacao'] ?? ''
             ];
+
             if (!in_array($m['pergunta'], $perguntasNoBanco, true)) {
                 $stmtInsMito->execute($paramsMito);
             } else {
