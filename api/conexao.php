@@ -83,6 +83,7 @@ try {
 
     // 7. Tabela 5: guia_plantio
     $pdo->exec("CREATE TABLE IF NOT EXISTS `guia_plantio` (
+    
         `id` INT AUTO_INCREMENT PRIMARY KEY,
         `cultura` VARCHAR(120) NOT NULL,
         `estacao` VARCHAR(120) NOT NULL,
@@ -92,6 +93,8 @@ try {
         `frequencia_rega` VARCHAR(120) NOT NULL,
         `dica_regional` TEXT NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $pdo->exec("ALTER TABLE `guia_plantio` MODIFY `estacao` VARCHAR(150) NOT NULL, MODIFY `espaco` VARCHAR(150) NOT NULL");
 
     // 8. Tabela 6: mitos_verdades (30 Questões Cientificamente Verificadas no Banco de Dados)
     $pdo->exec("CREATE TABLE IF NOT EXISTS `mitos_verdades` (
@@ -193,7 +196,7 @@ try {
     }
 
     // Seed 4: Comentários Iniciais
-    if (!empty($DADOS_COMENTARIOS)) {
+    if (!empty($DADOS_COMENTARIOS_INICIAIS)) {
         $stmtCheckCom = $pdo->query("SELECT COUNT(*) FROM `comentarios`");
         if ((int)$stmtCheckCom->fetchColumn() === 0) {
             $stmtInsCom = $pdo->prepare("INSERT INTO `comentarios` 
