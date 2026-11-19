@@ -11,11 +11,11 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/dados.php';
 
-$host   = 'SEU_HOST_DA_NUVEM'; // Ex: ://tidbcloud.com
+$host   = 'gateway01.sa-east-1.prod.aws.tidbcloud.com'; // Ex: ://tidbcloud.com
 $port   = '4000';              // Coloque a porta fornecida pelo serviço (ex: 4000, 3306, etc.)
-$user   = 'SEU_USUARIO';
-$pass   = 'SUA_SENHA';
-$dbname = 'NOME_DO_BANCO_JA_CRIADO'; // Ex: test ou db_sustentabilidade
+$user   = '3cbu4Yuw3KXeH6t.root';
+$pass   = '1J0feb9r472F8Y6G';
+$dbname = 'sustentamais'; // Ex: test ou db_sustentabilidade
 
 try {
     // 1. Conecta direto no banco da nuvem informando a porta e o dbname
