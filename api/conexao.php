@@ -17,7 +17,7 @@ require_once __DIR__ . '/dados.php';
 $host   = '://tidbcloud.com';
 $port   = '4000';
 $user   = '3obu4Yuw3KXeH6t.root';
-$pass   = 'COLOQUE_SUA_SENHA_AQUI'; // <-- Clique em "Reset Password" no TiDB e cole a senha aqui
+$pass   = '0UvCcg70xMv0ypSk'; // <-- Clique em "Reset Password" no TiDB e cole a senha aqui
 $dbname = 'db_sustentabilidade';
 
 try {
