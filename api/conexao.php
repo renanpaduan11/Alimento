@@ -2,7 +2,7 @@
 /**
  * PROJETO ACADÊMICO: SUSTENTA+ — Tecnologia, Informação e Sustentabilidade
  * EQUIPE 03: Alimentação Sustentável — Do campo ao prato: produzir, consumir e desperdiçar
- * ARQUIVO: conexao.php (Conexão MySQL, 6 Tabelas e Auto-Sync Inteligente com dados.php)
+ * ARQUIVO: conexao.php (Conexão TiDB Cloud / Vercel, 6 Tabelas e Auto-Sync Inteligente com dados.php)
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -11,21 +11,33 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/dados.php';
 
-$host   = 'gateway01.sa-east-1.prod.aws.tidbcloud.com'; // Ex: ://tidbcloud.com
-$port   = '4000';              // Coloque a porta fornecida pelo serviço (ex: 4000, 3306, etc.)
-$user   = '3cbu4Yuw3KXeH6t.root';
-$pass   = '1J0feb9r472F8Y6G';
-$dbname = 'sustentamais'; // Ex: test ou db_sustentabilidade
+// ===================================================================
+// CONFIGURAÇÕES DO TIDB CLOUD (PREENCHIDAS COM SEUS DADOS)
+// ===================================================================
+$host   = '://tidbcloud.com';
+$port   = '4000';
+$user   = '3obu4Yuw3KXeH6t.root';
+$pass   = 'COLOQUE_SUA_SENHA_AQUI'; // <-- Clique em "Reset Password" no TiDB e cole a senha aqui
+$dbname = 'db_sustentabilidade';
 
 try {
-    // 1. Conecta direto no banco da nuvem informando a porta e o dbname
-    $pdo = new PDO("mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4", $user, $pass, [
+    // 1. Conexão inicial ao servidor TiDB Cloud (com SSL obrigatório para conexão pública)
+    $options = [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
-    ]);
+    ];
 
-    // (Remova ou comente as duas linhas de CREATE DATABASE e USE $dbname)
+    // Ativa o certificado SSL padrão do ambiente Linux/Vercel exigido pelo TiDB Cloud
+    if (file_exists('/etc/ssl/certs/ca-certificates.crt')) {
+        $options[PDO::MYSQL_ATTR_SSL_CA] = '/etc/ssl/certs/ca-certificates.crt';
+    }
+
+    $pdo = new PDO("mysql:host=$host;port=$port;charset=utf8mb4", $user, $pass, $options);
+
+    // 2. Autocriação do Banco de Dados
+    $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbname` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    $pdo->exec("USE `$dbname`");
 
     // 3. Tabela 1: usuarios_adm
     $pdo->exec("CREATE TABLE IF NOT EXISTS `usuarios_adm` (
@@ -183,90 +195,90 @@ try {
         }
     }
 
-    // Seed 4: Comentários Iniciais
-    $stmtCheckCom = $pdo->query("SELECT COUNT(*) FROM `comentarios`");
-    if ((int)$stmtCheckCom->fetchColumn() === 0 && !empty($DADOS_COMENTARIOS_INICIAIS)) {
-        $stmtInsCom = $pdo->prepare("INSERT INTO `comentarios` 
-            (`tipo_origem`, `item_id`, `nome_usuario`, `nota`, `texto`, `status`) 
-            VALUES (:tipo, :item_id, :nome, :nota, :texto, :status)");
+    // Seed 4: Comentários Iniciais (Insere apenas se a tabela estiver vazia)
+    if (!empty($DADOS_COMENTARIOS)) {
+        $stmtCheckCom = $pdo->query("SELECT COUNT(*) FROM `comentarios`");
+        if ((int)$stmtCheckCom->fetchColumn() === 0) {
+            $stmtInsCom = $pdo->prepare("INSERT INTO `comentarios` 
+                (`tipo_origem`, `item_id`, `nome_usuario`, `nota`, `texto`, `status`) 
+                VALUES (:tipo_origem, :item_id, :nome_usuario, :nota, :texto, :status)");
 
-        foreach ($DADOS_COMENTARIOS_INICIAIS as $c) {
-            $stmtInsCom->execute([
-                ':tipo'    => $c['tipo_origem'],
-                ':item_id' => $c['item_id'],
-                ':nome'    => $c['nome_usuario'],
-                ':nota'    => $c['nota'],
-                ':texto'   => $c['texto'],
-                ':status'  => $c['status']
-            ]);
+            foreach ($DADOS_COMENTARIOS as $c) {
+                $stmtInsCom->execute([
+                    ':tipo_origem'  => $c['tipo_origem'],
+                    ':item_id'      => $c['item_id'],
+                    ':nome_usuario' => $c['nome_usuario'],
+                    ':nota'         => $c['nota'],
+                    ':texto'        => $c['texto'],
+                    ':status'       => $c['status'] ?? 'aprovado'
+                ]);
+            }
         }
     }
-
-    // Seed 5: Guia de Plantio (Sincroniza e remove títulos antigos com numeração fixa)
+    // Seed 5: Guia de Plantio (Insere novas culturas e atualiza dicas existentes)
     if (!empty($DADOS_PLANTIO)) {
-        $existeAntigoNumerado = (int)$pdo->query("SELECT COUNT(*) FROM `guia_plantio` WHERE `cultura` LIKE '1.%'")->fetchColumn();
-        $qtdPlantioBanco      = (int)$pdo->query("SELECT COUNT(*) FROM `guia_plantio`")->fetchColumn();
+        $culturasNoBanco = $pdo->query("SELECT `cultura` FROM `guia_plantio`")->fetchAll(PDO::FETCH_COLUMN);
 
-        if ($existeAntigoNumerado > 0 || $qtdPlantioBanco !== count($DADOS_PLANTIO)) {
-            $pdo->exec("TRUNCATE TABLE `guia_plantio`");
-            $stmtInsPl = $pdo->prepare("INSERT INTO `guia_plantio` 
-                (`cultura`, `estacao`, `espaco`, `tempo_colheita`, `necessidade_sol`, `frequencia_rega`, `dica_regional`) 
-                VALUES (:c, :est, :esp, :t, :s, :r, :d)");
-            foreach ($DADOS_PLANTIO as $p) {
-                $stmtInsPl->execute([
-                    ':c'   => $p['nome'],
-                    ':est' => implode(', ', $p['estacoes']),
-                    ':esp' => implode(', ', $p['espacos']),
-                    ':t'   => $p['colheita'],
-                    ':s'   => $p['sol'],
-                    ':r'   => $p['rega'],
-                    ':d'   => $p['dicaRegional']
-                ]);
+        $stmtInsPlantio = $pdo->prepare("INSERT INTO `guia_plantio` 
+            (`cultura`, `estacao`, `espaco`, `tempo_colheita`, `necessidade_sol`, `frequencia_rega`, `dica_regional`) 
+            VALUES (:cultura, :estacao, :espaco, :tempo_colheita, :necessidade_sol, :frequencia_rega, :dica_regional)");
+
+        $stmtUpdPlantio = $pdo->prepare("UPDATE `guia_plantio` SET 
+            `estacao` = :estacao,
+            `espaco` = :espaco,
+            `tempo_colheita` = :tempo_colheita,
+            `necessidade_sol` = :necessidade_sol,
+            `frequencia_rega` = :frequencia_rega,
+            `dica_regional` = :dica_regional
+            WHERE `cultura` = :cultura");
+
+        foreach ($DADOS_PLANTIO as $p) {
+            $paramsPlantio = [
+                ':cultura'         => $p['cultura'],
+                ':estacao'         => $p['estacao'],
+                ':espaco'          => $p['espaco'],
+                ':tempo_colheita'  => $p['tempo_colheita'],
+                ':necessidade_sol' => $p['necessidade_sol'],
+                ':frequencia_rega' => $p['frequencia_rega'],
+                ':dica_regional'   => $p['dica_regional']
+            ];
+            if (!in_array($p['cultura'], $culturasNoBanco, true)) {
+                $stmtInsPlantio->execute($paramsPlantio);
+            } else {
+                $stmtUpdPlantio->execute($paramsPlantio);
             }
         }
     }
 
-    // Seed 6: Sincroniza as 30 Questões de Mito ou Verdade no MySQL e garante imagens atualizadas
+    // Seed 6: Mitos e Verdades (Insere novas perguntas e atualiza explicações/imagens)
     if (!empty($DADOS_MITOS)) {
-        $qtdMitosBanco = (int)$pdo->query("SELECT COUNT(*) FROM `mitos_verdades`")->fetchColumn();
-        if ($qtdMitosBanco !== count($DADOS_MITOS)) {
-            $pdo->exec("TRUNCATE TABLE `mitos_verdades`");
-            $stmtInsMito = $pdo->prepare("INSERT INTO `mitos_verdades` 
-                (`id`, `pergunta`, `resposta_correta`, `imagem`, `explicacao`) 
-                VALUES (:id, :p, :r, :img, :exp)");
-            foreach ($DADOS_MITOS as $m) {
-                $stmtInsMito->execute([
-                    ':id'  => (int)$m['id'],
-                    ':p'   => $m['pergunta'],
-                    ':r'   => $m['respostaCorreta'],
-                    ':img' => $m['imagem'],
-                    ':exp' => $m['explicacao']
-                ]);
-            }
-        } else {
-            $stmtUpdMito = $pdo->prepare("UPDATE `mitos_verdades` SET 
-                `pergunta` = :p,
-                `resposta_correta` = :r,
-                `imagem` = :img,
-                `explicacao` = :exp
-                WHERE `id` = :id");
-            foreach ($DADOS_MITOS as $m) {
-                $stmtUpdMito->execute([
-                    ':id'  => (int)$m['id'],
-                    ':p'   => $m['pergunta'],
-                    ':r'   => $m['respostaCorreta'],
-                    ':img' => $m['imagem'],
-                    ':exp' => $m['explicacao']
-                ]);
+        $perguntasNoBanco = $pdo->query("SELECT `pergunta` FROM `mitos_verdades`")->fetchAll(PDO::FETCH_COLUMN);
+
+        $stmtInsMito = $pdo->prepare("INSERT INTO `mitos_verdades` 
+            (`pergunta`, `resposta_correta`, `imagem`, `explicacao`) 
+            VALUES (:pergunta, :resposta_correta, :imagem, :explicacao)");
+
+        $stmtUpdMito = $pdo->prepare("UPDATE `mitos_verdades` SET 
+            `resposta_correta` = :resposta_correta,
+            `imagem` = :imagem,
+            `explicacao` = :explicacao
+            WHERE `pergunta` = :pergunta");
+
+        foreach ($DADOS_MITOS as $m) {
+            $paramsMito = [
+                ':pergunta'         => $m['pergunta'],
+                ':resposta_correta' => $m['resposta_correta'],
+                ':imagem'           => $m['imagem'],
+                ':explicacao'       => $m['explicacao']
+            ];
+            if (!in_array($m['pergunta'], $perguntasNoBanco, true)) {
+                $stmtInsMito->execute($paramsMito);
+            } else {
+                $stmtUpdMito->execute($paramsMito);
             }
         }
     }
 
 } catch (PDOException $e) {
-    die("<div style='font-family:sans-serif; padding:24px; background:#FEF2F2; color:#991B1B; border:2px solid #EF4444; border-radius:12px; max-width:700px; margin:40px auto;'>
-            <h2 style='margin-top:0;'>Erro de Conexão com o Banco de Dados MySQL</h2>
-            <p>Certifique-se de que o <strong>MySQL</strong> está iniciado no XAMPP (utilizador <code>root</code> e palavra-passe vazia <code>\"\"</code>).</p>
-            <p><strong>Mensagem técnica:</strong> " . htmlspecialchars($e->getMessage()) . "</p>
-         </div>");
+    die("Erro na conexão com o banco de dados: " . $e->getMessage());
 }
-?>
